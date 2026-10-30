@@ -1,0 +1,132 @@
+# Fluister configuration. Restart the app after editing.
+# Your own copy lives in config.yaml (created from this file on first run,
+# never committed). Edit that one, not this example.
+
+hotkey:
+  # mode "pynput": hold the key below to talk, Esc cancels.
+  # mode "fn": hold the fn/globe key like Wispr Flow (macOS only, experimental).
+  mode: pynput
+  key: alt_r          # alt_r, alt_l, cmd_r, ctrl_r, shift_r, f8, f9
+
+audio:
+  min_seconds: 0.35   # ignore accidental taps shorter than this
+  # Keep the mic open between dictations with a short pre-roll buffer, so
+  # the first syllable is never clipped. Trade-off: macOS shows the orange
+  # mic indicator permanently. Set false to open the mic on key press.
+  always_on: true
+  preroll_ms: 300     # audio kept from just before the key press
+  tail_ms: 250        # keep recording this long after release
+
+# Silero VAD speech gate (same model Handy uses). Drops accidental taps
+# and silence before anything is pasted, and drops classic silence
+# hallucinations ("You", "Thank you.") when there was little real speech.
+vad:
+  enabled: true
+  min_speech_seconds: 0.3
+  hallucination_max_speech_s: 1.2
+  # hallucinations: [...]   # override the default phrase list if needed
+
+# Start/stop sounds (macOS system sounds: Tink, Pop, Morse, Purr, ...) and
+# muting other audio (music, video) while you dictate.
+feedback:
+  sounds: true
+  start_sound: Tink
+  stop_sound: Pop
+  volume: 0.3
+  mute_while_recording: true
+
+injection:
+  # Try direct Accessibility API insertion at the cursor first (no
+  # clipboard, no synthetic keystroke, and nothing visible to clipboard
+  # managers). Falls back automatically to clipboard+Cmd+V when this
+  # fails, is unavailable, or the field is a secure text field.
+  ax_insert: true
+  trailing_space: true   # add a space so the next dictation does not glue on
+  # Press Return after pasting in these apps (exact app names, e.g.
+  # Claude, ChatGPT). Empty = never. Sends without a chance to review.
+  auto_submit_apps: []
+
+# Notices when you manually retype something Fluister just pasted (a
+# misheard name, a term it keeps getting wrong) and, after `threshold`
+# repeats, shows a one-time tray notification suggesting you add it to
+# `replacements` above. Purely local (learned_corrections.json next to
+# history.jsonl); never edits config.yaml and never adds anything to
+# `dictionary` automatically, because unscoped names in the dictionary
+# over-correct unrelated people (a dictionary entry "Sara" also turned
+# every "Sarah" into "Sara"). Scope name fixes via `replacements`.
+dictionary_learning:
+  enabled: true
+  threshold: 2
+  check_delay_seconds: 4
+
+asr:
+  # Backends:
+  #   parakeet       local, Apple Silicon, STREAMING: transcribes while you
+  #                  speak, text is nearly ready on release, live preview in
+  #                  the pill                           (pip install parakeet-mlx)
+  #   mlx            local, Apple Silicon, batch        (pip install mlx-whisper)
+  #   fasterwhisper  local, cross-platform              (installed by default)
+  #   groq           cloud, ~$0.04 per audio hour       (set GROQ_API_KEY)
+  #   openai         cloud                              (set OPENAI_API_KEY)
+  # Benchmark 2026-07-06 (15s NL clip, M-series): mlx warm 737 ms,
+  # fasterwhisper warm 10548 ms. mlx wins by 14x.
+  # Benchmark 2026-07-15 (same clip, streamed real-time): parakeet finalize
+  # tail 176-290 ms after key release vs 700-1700 ms whisper busy time.
+  # Trade-off: whisper is slightly stronger on Dutch proper nouns (synthetic
+  # voice test: "Bright Carriers" vs parakeet "Bruit Carriers"); revert to
+  # backend mlx + the whisper model below if real dictations confirm this.
+  backend: parakeet
+  model: mlx-community/parakeet-tdt-0.6b-v3
+  # parakeet model example: mlx-community/parakeet-tdt-0.6b-v3
+  # mlx model example:      mlx-community/whisper-large-v3-turbo
+  # groq model example:     whisper-large-v3-turbo
+  compute_type: int8
+  # null = autodetect per dictation (handy for NL/EN mixing). Ignored by
+  # parakeet: the v3 model is multilingual and detects language itself.
+  language: null
+
+llm:
+  # Any OpenAI-compatible endpoint works. Examples:
+  #   Ollama (local, free):
+  #     base_url: http://localhost:11434/v1
+  #     model: qwen3:4b-instruct
+  #   Gemini Flash-Lite (cheapest paid, $0.10/$0.40 per M tokens):
+  #     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  #     model: gemini-2.5-flash-lite
+  #     api_key_env: GEMINI_API_KEY
+  #   Groq (fast and cheap):
+  #     base_url: https://api.groq.com/openai/v1
+  #     model: llama-3.1-8b-instant
+  #     api_key_env: GROQ_API_KEY
+  # backend "none" pastes the raw transcript without a formatting pass.
+  backend: ollama
+  model: qwen3:4b-instruct
+  base_url: http://localhost:11434/v1
+  api_key_env: ""
+  temperature: 0.2
+  timeout: 20
+
+# Terms the formatter must always spell exactly like this: product and
+# company names, jargon. Keep people's names out (see dictionary_learning).
+dictionary:
+  - Wispr Flow
+  - Claude Code
+  - GitHub
+
+# Hard find-and-replace applied after the formatting pass. Scope fixes for
+# names to their context so other people with a similar name are left alone.
+replacements:
+  "Get Hub": "GitHub"
+  # "Regards, Sarah": "Regards, Sara"
+
+# Style hints per focused app (use the exact app name as the OS reports it).
+app_styles:
+  Mail: "Formal email register, complete sentences."
+  Slack: "Casual and short."
+  WhatsApp: "Casual, informal."
+  Cursor: "Keep technical terms and identifiers verbatim."
+  Code: "Keep technical terms and identifiers verbatim."
+  default: ""
+
+history:
+  enabled: true       # appends to history.jsonl next to this file, stays local

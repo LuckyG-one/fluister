@@ -1,0 +1,10 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Personal data: your own config, dictation history and learned corrections
+config.yaml
+history.jsonl
+learned_corrections.json

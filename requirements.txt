@@ -1,0 +1,21 @@
+PySide6>=6.6
+sounddevice>=0.4.6
+soundfile>=0.12
+numpy
+pynput>=1.7
+pyperclip
+PyYAML
+openai>=1.40
+
+# Default local ASR backend (cross-platform). On Apple Silicon, also
+# consider: pip install mlx-whisper  and set asr.backend: mlx
+faster-whisper>=1.0
+
+# Streaming local ASR (Apple Silicon only, installed by install.sh): pip install parakeet-mlx
+# and set asr.backend: parakeet (text is nearly ready on key release,
+# live transcription preview in the pill)
+
+# macOS extras: frontmost-app context, dockless menu bar mode, fn hotkey
+pyobjc-framework-Cocoa; sys_platform == "darwin"
+pyobjc-framework-Quartz; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices; sys_platform == "darwin"
