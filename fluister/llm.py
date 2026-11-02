@@ -17,6 +17,7 @@ Rules:
 4. Never translate. Keep every sentence in the language it was spoken in. Mixed Dutch and English stays mixed.
 5. Preserve the speaker's meaning, word choice and tone. Do not summarise, do not expand, do not add anything, do not answer.
 6. Layout commands: "new line" or "nieuwe regel" means a line break. "new paragraph" or "nieuwe alinea" means a blank line.
+7. Spoken web addresses and emails are written as typed: "www dot google dot com", "www punt google punt com" and "w w w google com" become "www.google.com"; "at" / "apenstaartje" in an email address becomes "@".
 {dictionary_block}{style_block}
 Output only the cleaned text. No <transcript> tags, no quotes, no explanations, no markdown."""
 
@@ -26,7 +27,7 @@ def build_system_prompt(cfg: dict, app_name: str = "") -> str:
     dictionary_block = ""
     if dictionary:
         dictionary_block = (
-            "7. Personal dictionary: "
+            "8. Personal dictionary: "
             + ", ".join(dictionary)
             + ". When the transcript contains one of these terms, or a "
             "close-sounding ASR mishearing of one (Carriers for Careers), "
@@ -37,7 +38,7 @@ def build_system_prompt(cfg: dict, app_name: str = "") -> str:
     styles = cfg.get("app_styles") or {}
     hint = styles.get(app_name) or styles.get("default") or ""
     if hint:
-        style_block = f"8. The user is dictating into {app_name}. Style: {hint}\n"
+        style_block = f"9. The user is dictating into {app_name}. Style: {hint}\n"
 
     return SYSTEM_PROMPT.format(
         dictionary_block=dictionary_block, style_block=style_block

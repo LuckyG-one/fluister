@@ -12,12 +12,12 @@ import threading
 import time
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QAction, QDesktopServices
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from . import config as config_module
 from . import corrections, vad
-from .asr import ASR, SAMPLE_RATE, StreamingTranscriber
+from .asr import ASR, SAMPLE_RATE, StreamingTranscriber, has_foreign_script
 from .audio import Recorder
 from .feedback import Feedback
 from .hotkey import HoldKeyListener, start_fn_listener
@@ -183,6 +183,12 @@ class Fluister(QObject):
             except Exception as exc:
                 self.pipeline_done.emit("", {"error": f"ASR failed: {exc}"})
                 return
+        if raw and self.cfg["asr"].get("rescue_foreign_script", True) and has_foreign_script(raw):
+            rescued = self.asr.rescue(audio)
+            if rescued:
+                meta["parakeet_raw"] = raw
+                raw = rescued
+                meta["rescued"] = True
         meta["raw"] = raw
         meta["asr_ms"] = int((time.time() - t0) * 1000)
         if vad_cfg["enabled"] and vad.is_hallucination(raw, speech_s, vad_cfg):
@@ -238,6 +244,23 @@ class Fluister(QObject):
         self.toggle_action.triggered.connect(self._toggle)
         menu.addAction(self.toggle_action)
 
+        lang_menu = menu.addMenu("Language")
+        lang_group = QActionGroup(lang_menu)
+        lang_group.setExclusive(True)
+        current = self.cfg["asr"].get("language") or None
+        for label, code in (
+            ("Auto (Dutch + English)", None),
+            ("Nederlands", "nl"),
+            ("English", "en"),
+        ):
+            action = QAction(label, lang_menu)
+            action.setCheckable(True)
+            action.setChecked(code == current)
+            action.triggered.connect(lambda _checked=False, c=code: self._set_language(c))
+            lang_group.addAction(action)
+            lang_menu.addAction(action)
+        self._lang_group = lang_group
+
         open_config = QAction("Open config.yaml", menu)
         open_config.triggered.connect(
             lambda: QDesktopServices.openUrl(
@@ -263,6 +286,15 @@ class Fluister(QObject):
         self.tray.setToolTip("Fluister: loading ASR model...")
         self.tray.show()
         self._menu = menu  # keep a reference so the menu is not GC'd
+
+    def _set_language(self, code):
+        self.cfg["asr"]["language"] = code
+        try:
+            config_module.save_asr_language(code)
+        except Exception as exc:
+            print(f"fluister: could not save language ({exc})")
+        names = {None: "auto", "nl": "Nederlands", "en": "English"}
+        self.tray.setToolTip(f"Fluister: language {names[code]}")
 
     def _toggle(self, checked):
         self.enabled = checked

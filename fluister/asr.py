@@ -14,6 +14,7 @@ import io
 import os
 import queue
 import threading
+import unicodedata
 
 import numpy as np
 
@@ -29,6 +30,16 @@ PARAKEET_STREAM_KWARGS = {"context_size": (256, 256), "depth": 99}
 # too little lookahead and wreck accuracy. Feed at least this many samples
 # per call (0.75 s); the final flush may be smaller.
 PARAKEET_MIN_CHUNK_SAMPLES = 12000
+
+
+def has_foreign_script(text: str) -> bool:
+    """True when the transcript contains letters outside the Latin script
+    (e.g. Cyrillic). Parakeet v3 detects the language itself and sometimes
+    decodes short Dutch/English clips as Russian."""
+    for ch in text:
+        if ch.isalpha() and not unicodedata.name(ch, "").startswith("LATIN"):
+            return True
+    return False
 
 
 class _ParakeetEngine:
@@ -89,7 +100,7 @@ class ASR:
     @property
     def streaming(self) -> bool:
         """True when the configured backend can transcribe while recording."""
-        return self.backend == "parakeet"
+        return self.backend == "parakeet" and not self.cfg.get("language")
 
     def warm(self):
         """Load local models up front so the first dictation is fast."""
@@ -116,6 +127,14 @@ class ASR:
     def transcribe(self, audio: np.ndarray) -> str:
         language = self.cfg.get("language") or None
 
+        if self.backend == "parakeet" and language:
+            # Parakeet cannot be forced into a language; a pinned language
+            # (menu bar choice) goes through whisper instead.
+            text = self.rescue(audio, [language])
+            if text:
+                return text
+            print("fluister: whisper failed, falling back to parakeet auto-detect")
+
         if self.backend == "parakeet":
             try:
                 return self._transcribe_parakeet_batch(audio)
@@ -137,6 +156,54 @@ class ASR:
             return self._cloud(audio, language)
 
         raise ValueError(f"Unknown ASR backend: {self.backend}")
+
+    def rescue(self, audio: np.ndarray, languages: list | None = None) -> str | None:
+        """Re-transcribe with mlx-whisper, forced to each language in
+        asr.rescue_languages, and keep the most confident result. Used when
+        Parakeet returned a script the user never dictates in. Returns None
+        when whisper is unavailable or fails. Runs on the engine thread
+        because MLX state is bound to the thread that created it."""
+        languages = languages or self.cfg.get("rescue_languages") or ["nl", "en"]
+        model = self.cfg.get("rescue_model") or WHISPER_MLX_DEFAULT_MODEL
+        done = threading.Event()
+        out = {}
+
+        def job():
+            try:
+                import mlx_whisper
+
+                best = None
+                for lang in languages:
+                    result = mlx_whisper.transcribe(
+                        audio, path_or_hf_repo=model, language=lang
+                    )
+                    text = result["text"].strip()
+                    segs = result.get("segments") or []
+                    score = (
+                        sum(s.get("avg_logprob", -10.0) for s in segs) / len(segs)
+                        if segs
+                        else -10.0
+                    )
+                    if text and not has_foreign_script(text):
+                        if best is None or score > best[0]:
+                            best = (score, text)
+                out["text"] = best[1] if best else None
+            except Exception as exc:
+                out["error"] = exc
+            finally:
+                done.set()
+
+        engine = self._ensure_engine()
+        if not engine.wait_ready(timeout=0.5):
+            return None
+        engine.submit(job)
+        # First use downloads the whisper model, so allow a long wait.
+        if not done.wait(timeout=300):
+            return None
+        if "error" in out:
+            print(f"fluister: whisper rescue failed ({out['error']})")
+            return None
+        return out["text"]
 
     def _transcribe_mlx(self, audio: np.ndarray, language, model: str | None = None) -> str:
         import mlx_whisper

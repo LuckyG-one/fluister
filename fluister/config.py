@@ -86,3 +86,17 @@ def load() -> dict:
     if CONFIG_PATH.exists():
         user = yaml.safe_load(CONFIG_PATH.read_text()) or {}
     return _merge(DEFAULTS, user)
+
+
+def save_asr_language(language):
+    """Persist asr.language in config.yaml by rewriting just that line, so
+    the user's comments survive. language is None, "nl" or "en"."""
+    import re
+
+    text = CONFIG_PATH.read_text(encoding="utf-8")
+    value = language or "null"
+    new, count = re.subn(
+        r"^(  language:)[^\n#]*", lambda m: f"{m.group(1)} {value}", text, count=1, flags=re.M
+    )
+    if count:
+        CONFIG_PATH.write_text(new, encoding="utf-8")

@@ -20,6 +20,7 @@ Good open-source dictation apps exist ([Handy](https://github.com/cjpais/Handy),
 - **Per-app tone**: formal in Mail, casual in Slack and WhatsApp, verbatim identifiers in code editors.
 - **Personal dictionary and replacements** for names and jargon it should always spell right.
 - **Learns from your corrections**: if you keep retyping the same word after a dictation, Fluister suggests a replacement rule.
+- **Language picker and script guard**: the menu bar has a Language submenu (Auto, Nederlands, English). Pinning a language uses Whisper, because Parakeet cannot be forced into one. In Auto mode, if Parakeet decodes a short clip as Cyrillic (a known quirk of the multilingual v3 model), the clip is re-transcribed with Whisper forced to Dutch and English. Needs `mlx-whisper` (installed by `install.sh` on Apple Silicon).
 - **Silence and hallucination guard**: a Silero voice-activity check means an accidental tap pastes nothing, and classic "Thank you." hallucinations are dropped.
 - **No clipped words**: an always-on mic keeps 300 ms of pre-roll and records 250 ms past release.
 - **Pastes without touching your clipboard** where possible (Accessibility API insertion), with a clipboard fallback.
