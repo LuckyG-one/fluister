@@ -86,3 +86,48 @@ def load() -> dict:
     if CONFIG_PATH.exists():
         user = yaml.safe_load(CONFIG_PATH.read_text()) or {}
     return _merge(DEFAULTS, user)
+
+
+def save_asr_language(language):
+    """Persist asr.language in config.yaml by editing only that line, so the
+    user's comments and spacing survive. language is None, "nl" or "en".
+    Works with any indentation and adds the key (or the whole asr block)
+    when it is missing."""
+    import re
+
+    value = language or "null"
+    lines = CONFIG_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    asr_idx = next(
+        (i for i, line in enumerate(lines) if re.match(r"^asr:[ \t]*(#.*)?$", line)),
+        None,
+    )
+    if asr_idx is None:
+        prefix = "" if not lines or lines[-1].endswith("\n") else "\n"
+        lines.append(f"{prefix}asr:\n  language: {value}\n")
+        CONFIG_PATH.write_text("".join(lines), encoding="utf-8")
+        return
+
+    child_indent = None
+    for i in range(asr_idx + 1, len(lines)):
+        line = lines[i]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            break
+        if child_indent is None:
+            child_indent = indent
+        if indent != child_indent:
+            continue  # nested deeper: not a direct child of asr
+        match = re.match(
+            r"^([ \t]+language:)[ \t]*([^#\r\n]*?)([ \t]*(?:#.*)?)(\r?\n?)$", line
+        )
+        if match:
+            lines[i] = f"{match.group(1)} {value}{match.group(3)}{match.group(4)}"
+            CONFIG_PATH.write_text("".join(lines), encoding="utf-8")
+            return
+
+    indent = " " * (child_indent or 2)
+    lines.insert(asr_idx + 1, f"{indent}language: {value}\n")
+    CONFIG_PATH.write_text("".join(lines), encoding="utf-8")

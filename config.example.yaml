@@ -84,6 +84,11 @@ asr:
   # null = autodetect per dictation (handy for NL/EN mixing). Ignored by
   # parakeet: the v3 model is multilingual and detects language itself.
   language: null
+  # Parakeet sometimes decodes short NL/EN clips as Russian. When the result
+  # contains non-Latin letters, re-transcribe with whisper (needs
+  # `pip install mlx-whisper`) forced to each language below, keep the best.
+  rescue_foreign_script: true
+  rescue_languages: [nl, en]
 
 llm:
   # Any OpenAI-compatible endpoint works. Examples:

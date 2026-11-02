@@ -30,7 +30,7 @@ APPLE_SILICON=0
 if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ]; then
   APPLE_SILICON=1
   say "Apple Silicon detected: installing parakeet-mlx (streaming ASR)"
-  .venv/bin/pip install --quiet parakeet-mlx
+  .venv/bin/pip install --quiet parakeet-mlx mlx-whisper
 fi
 
 if [ ! -f config.yaml ]; then
