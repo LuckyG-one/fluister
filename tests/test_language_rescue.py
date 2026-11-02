@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from fluister import config as config_module
 from fluister.asr import ASR, has_foreign_script
 
@@ -26,22 +28,57 @@ class ForeignScriptTests(unittest.TestCase):
 
 
 class SaveLanguageTests(unittest.TestCase):
-    def test_rewrites_only_the_language_line(self):
+    def _roundtrip(self, text, language):
+        """Write text as config.yaml, save the language, return the parsed
+        asr.language and the new file content."""
         original = config_module.CONFIG_PATH
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.yaml"
-            path.write_text(
-                "asr:\n  backend: parakeet\n  language: null  # auto\n", encoding="utf-8"
-            )
+            path.write_text(text, encoding="utf-8")
+            config_module.CONFIG_PATH = path
+            try:
+                config_module.save_asr_language(language)
+                content = path.read_text()
+            finally:
+                config_module.CONFIG_PATH = original
+        return yaml.safe_load(content)["asr"]["language"], content
+
+    def test_keeps_inline_comment_and_parses(self):
+        text = "asr:\n  backend: parakeet\n  language: null  # auto\n"
+        value, content = self._roundtrip(text, "nl")
+        self.assertEqual(value, "nl")
+        self.assertIn("  language: nl  # auto", content)
+        self.assertIn("backend: parakeet", content)
+        value, _ = self._roundtrip(content, None)
+        self.assertIsNone(value)
+
+    def test_four_space_indentation(self):
+        value, _ = self._roundtrip("asr:\n    backend: parakeet\n    language: en\n", None)
+        self.assertIsNone(value)
+
+    def test_adds_missing_key(self):
+        value, content = self._roundtrip("asr:\n  backend: parakeet\nllm:\n  model: x\n", "nl")
+        self.assertEqual(value, "nl")
+        self.assertIn("llm:\n  model: x", content)
+
+    def test_adds_missing_asr_block(self):
+        value, _ = self._roundtrip("llm:\n  model: x\n", "en")
+        self.assertEqual(value, "en")
+
+    def test_ignores_language_key_in_other_sections(self):
+        text = "asr:\n  backend: parakeet\nother:\n  language: fr\n"
+        original = config_module.CONFIG_PATH
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text(text, encoding="utf-8")
             config_module.CONFIG_PATH = path
             try:
                 config_module.save_asr_language("nl")
-                self.assertIn("  language: nl", path.read_text())
-                self.assertIn("backend: parakeet", path.read_text())
-                config_module.save_asr_language(None)
-                self.assertIn("  language: null", path.read_text())
+                data = yaml.safe_load(path.read_text())
             finally:
                 config_module.CONFIG_PATH = original
+        self.assertEqual(data["asr"]["language"], "nl")
+        self.assertEqual(data["other"]["language"], "fr")
 
 
 if __name__ == "__main__":
